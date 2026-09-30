@@ -1,0 +1,20 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# YOLO weights are downloaded automatically on first run (see models/README.md)
+models/*.pt
+
+# Ultralytics output folders (created if you run the yolo CLI)
+runs/
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Zipped copy of the project
+*.zip
