@@ -16,7 +16,6 @@ and confidence scores.
 | Smit Thakkar | 20233570 |
 | Vishal Prabhu | 20233582 |
 
-![Live webcam detection](outputs/screenshots/02_webcam_live_detection.png)
 
 ## Description
 
