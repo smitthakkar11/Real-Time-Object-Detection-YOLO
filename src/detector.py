@@ -8,6 +8,7 @@ We do NOT train anything here. The model was already trained by
 Ultralytics on the COCO dataset (80 everyday object classes).
 """
 
+import threading
 from pathlib import Path
 
 from ultralytics import YOLO
@@ -31,6 +32,10 @@ class ObjectDetector:
         # Dictionary of class id -> class name, e.g. {0: 'person', 39: 'bottle', ...}
         self.class_names = self.model.names
 
+        # The same model can be used by several browser tabs (threads) at once.
+        # The lock makes them take turns, one frame at a time.
+        self.lock = threading.Lock()
+
     def detect(self, frame, confidence=0.5):
         """
         Run YOLO on one BGR frame (as read by OpenCV).
@@ -45,7 +50,8 @@ class ObjectDetector:
         Only detections with score >= confidence are returned.
         """
         # verbose=False stops Ultralytics from printing a line for every frame
-        results = self.model(frame, conf=confidence, verbose=False)
+        with self.lock:
+            results = self.model(frame, conf=confidence, verbose=False)
         result = results[0]  # we passed one frame, so there is one result
 
         detections = []
