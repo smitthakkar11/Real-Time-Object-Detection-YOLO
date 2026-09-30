@@ -21,6 +21,7 @@ Browser screenshots of the Streamlit app while it was running.
 | `06_image_mode_conf_025.png` | Same image, threshold 0.25: 2 persons + `tie 0.46` |
 | `07_empty_scene_no_objects.png` | Crop of a webcam frame showing only wall/ceiling: 0 objects, app keeps working |
 | `08_webcam_unavailable_error.png` | Error message when the camera could not be opened (camera permission was not granted) |
+| `09_online_browser_webcam_realtime.png` | **Online** app on Streamlit Community Cloud, browser webcam (real-time) mode, fed by Chrome's fake camera playing a 30 fps video of the sample images: bus + 3 persons, FPS 21.0 |
 
 ## sample_results/
 
@@ -44,6 +45,14 @@ loop iteration: read frame + YOLO + drawing + sending to the browser):
 - About **22–24 FPS** when one browser tab was running detection.
 - About **10–14 FPS** while a second browser tab was running detection at the
   same time. Both tabs were sharing the camera and the CPU.
+
+**Online version (Streamlit Community Cloud), browser webcam mode**, tested with Chrome's fake
+camera playing a video made from the sample images (not a real camera):
+
+- 10 fps test video: FPS readings about 8–17. The input itself was only 10 fps.
+- 30 fps test video: FPS mostly **15–24**, with single readings as low as 3 when frames arrived
+  unevenly over the network. Detections: bus + 3 persons, 2 persons (+ tie), and 0 on the empty
+  grey frames. The bus was sometimes labelled "truck".
 
 **YOLO inference alone** on a 640x480 frame (CPU, 50 runs after warm-up):
 mean **31.3 ms**, min 29.3 ms, max 34.0 ms.

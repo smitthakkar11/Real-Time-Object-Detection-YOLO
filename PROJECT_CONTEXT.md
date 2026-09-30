@@ -12,6 +12,9 @@ A quick summary for another developer or AI assistant picking up this project.
   - Smit Thakkar (20233570)
   - Vishal Prabhu (20233582)
 
+**Live demo:** https://realtime-object-detection-yolo.streamlit.app (Streamlit Community Cloud,
+deployed from `main`; every push redeploys).
+
 ## Objective
 
 Show how a **pretrained** YOLO model can be combined with OpenCV to detect objects in
@@ -25,10 +28,12 @@ object count. No model training is involved.
 - OpenCV (`opencv-python`): webcam capture, drawing, BGR→RGB conversion
 - Ultralytics (`ultralytics`): YOLO model loading and inference (pulls in PyTorch)
 - Streamlit: UI (the only UI framework)
+- streamlit-webrtc: streams the browser webcam to the app and back (WebRTC). Added so that
+  real-time detection also works in the online deployment. Pulls in aiortc + av (PyAV).
 - NumPy: decoding uploaded image bytes
 
 Deliberately **not** used: FastAPI/Flask/Django, databases, REST APIs, auth, Docker,
-React or other JS front-ends, WebSockets/streamlit-webrtc, tracking, custom training.
+React or custom JS front-ends, tracking, custom training.
 
 ## Model
 
@@ -50,8 +55,9 @@ Webcam → Streamlit UI → OpenCV Frame Capture → Pretrained YOLO → Object 
 
 | File | Responsibility |
 |------|----------------|
-| `app.py` | Streamlit page, sidebar controls (input source, confidence slider, camera index, start/stop toggle), webcam loop, image-upload mode, stats panel |
-| `src/detector.py` | `ObjectDetector` class: loads YOLO, `detect(frame, confidence)` → list of `{box, class_id, label, confidence}` |
+| `app.py` | Streamlit page, sidebar controls (input source, confidence slider, camera index, start/stop toggle), browser-webcam mode (`run_browser_webcam`, streamlit-webrtc), local OpenCV webcam loop (`run_webcam`), image-upload mode, stats panel |
+| `src/detector.py` | `ObjectDetector` class: loads YOLO, `detect(frame, confidence)` → list of `{box, class_id, label, confidence}`. A `threading.Lock` makes concurrent callers (several viewers) take turns |
+| `requirements.txt` / `packages.txt` | Python deps (with the CPU-only PyTorch index) / Debian package `libgl1` + `libglib2.0-0` for OpenCV on Streamlit Cloud |
 | `src/utils.py` | `draw_detections`, `format_label`, `calculate_fps`, `count_objects` |
 | `models/README.md` | Model choice and download notes |
 | `outputs/README.md` | What every screenshot/result image shows + all measured numbers |
@@ -73,7 +79,18 @@ Then open <http://localhost:8501> (Streamlit usually opens it automatically) and
 
 ## Important implementation decisions
 
-- **Continuous webcam in Streamlit:** a `while True` loop in the script reads frames with
+- **Three input sources:** "Browser webcam (real-time)" (default, works locally and online),
+  "Local webcam (OpenCV)" (works only where the camera is attached to the server, i.e. a local run),
+  "Image".
+- **Browser webcam (WebRTC):** `webrtc_streamer(mode=SENDRECV, video_frame_callback=process_frame,
+  async_processing=True)`. The callback runs in a worker thread: av.VideoFrame → `to_ndarray("bgr24")`
+  → detect → draw → `av.VideoFrame.from_ndarray`. `st.*` cannot be called there, so FPS and detections
+  are shared through a lock-protected dict in `st.session_state`, and the script polls it every 0.5 s
+  while `ctx.state.playing`. With `async_processing`, frames that arrive while YOLO is busy are
+  dropped. ICE servers are chosen automatically by streamlit-webrtc: env/secrets `CLOUDFLARE_TURN_KEY_ID`
+  and `CLOUDFLARE_TURN_KEY_API_TOKEN`, `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, or `HF_TOKEN`,
+  otherwise Google STUN. STUN only worked for our cloud test, but some networks will need TURN.
+- **Continuous webcam in Streamlit (local OpenCV mode):** a `while True` loop in the script reads frames with
   `cv2.VideoCapture` and updates one `st.empty()` placeholder each frame. When the user
   switches the toggle off (or changes any widget), Streamlit stops the running script and
   starts a new run. The `finally:` block then calls `cap.release()`. This is the simplest
@@ -94,7 +111,10 @@ Then open <http://localhost:8501> (Streamlit usually opens it automatically) and
 
 ## Measured results (MacBook Air M3, 8 GB, CPU)
 
-- Live webcam: ~22–24 FPS with one tab. Person detected in all 52 saved frames at 0.77–0.94.
+- Live webcam (local OpenCV mode): ~22–24 FPS with one tab. Person detected in all 52 saved frames at 0.77–0.94.
+- Browser webcam mode, local: works (tested with a Chrome fake camera, 10 fps input, ~10 FPS).
+- Browser webcam mode, **online** (Streamlit Cloud, Python 3.14 default): Chrome fake camera with
+  30 fps input → mostly 15–24 FPS (single readings down to ~3). Bus sometimes labelled "truck".
 - YOLO11n inference: 31.3 ms mean per 640x480 frame (50 runs).
 - Full tables (threshold, simulated low light, simulated distance, empty scene) are in
   `outputs/README.md`.
@@ -103,7 +123,9 @@ Then open <http://localhost:8501> (Streamlit usually opens it automatically) and
 
 Hardware-dependent speed. Sensitive to lighting, blur and object size/distance. Only the
 80 COCO classes. False positives at low thresholds. Per-frame counts only (no tracking).
-The camera must be local to the machine running Streamlit.
+The OpenCV webcam mode needs the camera on the machine running Streamlit. The online version
+runs on a shared free CPU, depends on the viewer's network, and may need a TURN server.
+The online real-time mode has not yet been tested with a real (non-fake) camera on the cloud.
 
 ## Future scope
 
